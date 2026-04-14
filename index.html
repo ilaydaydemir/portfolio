@@ -1079,6 +1079,26 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowUp') goPrev();
 });
 
+// Touch swipe nav for mobile
+let touchStartY = 0;
+let touchStartX = 0;
+document.querySelectorAll('.page').forEach(page => {
+  page.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+
+  page.addEventListener('touchend', (e) => {
+    const dy = touchStartY - e.changedTouches[0].clientY;
+    const dx = Math.abs(touchStartX - e.changedTouches[0].clientX);
+    if (Math.abs(dy) < 40 || dx > Math.abs(dy)) return; // too short or horizontal swipe
+    const atBottom = page.scrollTop + page.clientHeight >= page.scrollHeight - 10;
+    const atTop = page.scrollTop <= 4;
+    if (dy > 0 && atBottom) goNext();
+    else if (dy < 0 && atTop) goPrev();
+  }, { passive: true });
+});
+
 function toggleSys() {
   const body = document.getElementById('sys-body');
   const arrow = document.getElementById('sys-toggle-arrow');
