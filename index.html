@@ -21,12 +21,14 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
 .nav-brand{padding:0 20px;font-size:12px;font-weight:600;color:var(--text);letter-spacing:.02em;border-right:1px solid var(--border);white-space:nowrap}
 .nav-brand span{color:var(--accent)}
 .nav-tabs{display:flex;align-items:stretch;height:100%;flex:1}
-.tab-btn{padding:0 24px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;letter-spacing:.02em;white-space:nowrap;position:relative}
-.tab-btn:hover{color:var(--text);background:rgba(255,255,255,.04)}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn{padding:0 24px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .25s;letter-spacing:.02em;white-space:nowrap;position:relative}
+.tab-btn:not(.active){animation:tab-glow 3s ease-in-out infinite}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.06);text-shadow:0 0 12px rgba(255,255,255,.5)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);animation:none}
 .tab-btn:not(.active)::after{content:'';position:absolute;top:10px;right:10px;width:5px;height:5px;border-radius:50%;background:var(--accent);animation:tab-pulse 1.8s ease-in-out infinite;opacity:0}
 .tab-btn:not(.active):hover::after{opacity:0}
 @keyframes tab-pulse{0%,100%{opacity:0;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}}
+@keyframes tab-glow{0%,100%{color:var(--text2);text-shadow:none}50%{color:#cdd9e5;text-shadow:0 0 8px rgba(255,255,255,.25)}}
 .nav-right{padding:0 16px;font-size:10px;color:var(--text);white-space:nowrap;display:flex;align-items:center;gap:12px}.nav-right a{color:var(--accent2);text-decoration:none;font-size:10px}.nav-right a:hover{text-decoration:underline}
 
 /* PAGES */
