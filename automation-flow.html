@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automation Trigger Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0d1117;font-family:'Inter',sans-serif;color:#cdd9e5;min-height:100%;overflow-x:hidden}
+
+.page-header{padding:32px 40px 0;text-align:center}
+.page-header h1{font-size:18px;font-weight:600;color:#cdd9e5;margin-bottom:6px}
+.page-header p{font-size:11px;color:#6e7681}
+
+/* FLOW GRID */
+.flow{display:flex;gap:0;padding:32px 24px 48px;overflow-x:auto;min-width:max-content;margin:0 auto}
+.layer{display:flex;flex-direction:column;gap:8px;min-width:160px;position:relative}
+.layer-header{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#484f58;text-align:center;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid #21262d}
+
+.node{padding:8px 12px;border-radius:6px;font-size:10px;font-weight:500;border:1px solid;text-align:center;white-space:nowrap;position:relative;cursor:default;transition:filter .15s}
+.node:hover{filter:brightness(1.2)}
+
+/* colors */
+.n-event  {color:#f59e0b;border-color:#f59e0b44;background:#f59e0b0d}
+.n-webhook{color:#ef4444;border-color:#ef444444;background:#ef44440d}
+.n-n8n   {color:#6366f1;border-color:#6366f144;background:#6366f10d}
+.n-db    {color:#22c55e;border-color:#22c55e44;background:#22c55e0d}
+.n-crm   {color:#3b82f6;border-color:#3b82f644;background:#3b82f60d}
+.n-agent {color:#d946ef;border-color:#d946ef44;background:#d946ef0d}
+.n-out   {color:#8b949e;border-color:#30363d;background:#161b22}
+
+/* connector column */
+.connector{width:56px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding-top:28px;gap:0;position:relative}
+
+svg.arrows{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:0 40px 40px}
+.leg{display:flex;align-items:center;gap:6px;font-size:9px}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Automation Trigger Map</h1>
+  <p>How external events flow through the system — trigger by trigger</p>
+</div>
+
+<div style="padding:24px 32px 0;overflow-x:auto">
+<div id="flow-wrap" style="position:relative;min-width:1100px">
+<svg id="svg-lines" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible"></svg>
+
+<div style="display:flex;gap:32px;padding-bottom:40px">
+
+  <!-- COL 1: TRIGGERS -->
+  <div class="layer" style="min-width:165px">
+    <div class="layer-header" style="color:#f59e0b">Triggers & Events</div>
+    <div class="node n-event" id="ev1">Email Reply</div>
+    <div class="node n-event" id="ev2">LinkedIn Reply</div>
+    <div class="node n-event" id="ev3">iMessage</div>
+    <div class="node n-event" id="ev4">Calendly Booking</div>
+    <div class="node n-event" id="ev5">TypeForm Submit</div>
+    <div class="node n-event" id="ev6">Slack Message</div>
+    <div class="node n-event" id="ev7">CRM Deal Change</div>
+    <div class="node n-event" id="ev8">Airtable Button</div>
+    <div class="node n-event" id="ev9">Cron Timer</div>
+    <div class="node n-event" id="ev10">User Command</div>
+    <div class="node n-event" id="ev11">GitHub Dispatch</div>
+  </div>
+
+  <!-- COL 2: WEBHOOKS -->
+  <div class="layer" style="min-width:155px">
+    <div class="layer-header" style="color:#ef4444">Webhooks</div>
+    <div class="node n-webhook" id="wh1">EmailBison</div>
+    <div class="node n-webhook" id="wh2">HeyReach</div>
+    <div class="node n-webhook" id="wh3">SmartLead</div>
+    <div class="node n-webhook" id="wh4">LemList</div>
+    <div class="node n-webhook" id="wh5">Linq</div>
+  </div>
+
+  <!-- COL 3: n8n -->
+  <div class="layer" style="min-width:175px">
+    <div class="layer-header" style="color:#6366f1">n8n Workflows</div>
+    <div class="node n-n8n" id="n1">Lead Tagging</div>
+    <div class="node n-n8n" id="n2">Reply Router</div>
+    <div class="node n-n8n" id="n3">AI Reply Agent</div>
+    <div class="node n-n8n" id="n4">Reply Approve</div>
+    <div class="node n-n8n" id="n5">Campaign Sync</div>
+    <div class="node n-n8n" id="n6">Exec Summary</div>
+    <div class="node n-n8n" id="n7">Blocklist Propagation</div>
+    <div class="node n-n8n" id="n8">Activity Router</div>
+    <div class="node n-n8n" id="n9">Calendly → CRM</div>
+    <div class="node n-n8n" id="n10">Post Call Analysis</div>
+    <div class="node n-n8n" id="n11">Error Monitor</div>
+  </div>
+
+  <!-- COL 4: DATABASES -->
+  <div class="layer" style="min-width:145px">
+    <div class="layer-header" style="color:#22c55e">Databases</div>
+    <div class="node n-db" id="db1">Supabase</div>
+    <div class="node n-db" id="db2">Airtable</div>
+    <div class="node n-db" id="db3">PGMQ Queues</div>
+    <div class="node n-db" id="db4">Edge Functions</div>
+  </div>
+
+  <!-- COL 5: CRM + PLATFORMS -->
+  <div class="layer" style="min-width:150px">
+    <div class="layer-header" style="color:#3b82f6">CRMs & Platforms</div>
+    <div class="node n-crm" id="crm1">HubSpot</div>
+    <div class="node n-crm" id="crm2">Salesforce</div>
+    <div class="node n-crm" id="crm3">Attio</div>
+    <div class="node n-crm" id="crm4">Slack</div>
+    <div class="node n-crm" id="crm5">Google Drive</div>
+    <div class="node n-crm" id="crm6">Google Sheets</div>
+  </div>
+
+  <!-- COL 6: AI AGENTS -->
+  <div class="layer" style="min-width:165px">
+    <div class="layer-header" style="color:#d946ef">AI Agents</div>
+    <div class="node n-agent" id="ag1">Campaign Pipeline</div>
+    <div class="node n-agent" id="ag2">Row Writer + QA</div>
+    <div class="node n-agent" id="ag3">Reply Agent</div>
+    <div class="node n-agent" id="ag4">Onboarding Agent</div>
+    <div class="node n-agent" id="ag5">Report Agent</div>
+    <div class="node n-agent" id="ag6">Ingestion Agent</div>
+  </div>
+
+  <!-- COL 7: OUTPUT -->
+  <div class="layer" style="min-width:150px">
+    <div class="layer-header">Output</div>
+    <div class="node n-out" id="out1">Reply Sent</div>
+    <div class="node n-out" id="out2">CRM Activity Logged</div>
+    <div class="node n-out" id="out3">Slack Notification</div>
+    <div class="node n-out" id="out4">Campaign Brief</div>
+    <div class="node n-out" id="out5">Performance Report</div>
+    <div class="node n-out" id="out6">Lead Blocked</div>
+    <div class="node n-out" id="out7">GitHub Action</div>
+  </div>
+
+</div>
+</div>
+</div>
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#f59e0b"></div>Triggers</div>
+  <div class="leg"><div class="leg-dot" style="background:#ef4444"></div>Webhooks</div>
+  <div class="leg"><div class="leg-dot" style="background:#6366f1"></div>n8n Workflows</div>
+  <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Databases</div>
+  <div class="leg"><div class="leg-dot" style="background:#3b82f6"></div>CRMs & Platforms</div>
+  <div class="leg"><div class="leg-dot" style="background:#d946ef"></div>AI Agents</div>
+</div>
+
+<script>
+const connections = [
+  // Events → Webhooks
+  ['ev1','wh1'], ['ev2','wh2'], ['ev3','wh5'],
+  // Events directly → n8n
+  ['ev4','n9'], ['ev5','n1'], ['ev6','n11'],
+  ['ev7','n8'], ['ev8','n10'], ['ev9','n5'],
+  ['ev10','ag1'], ['ev11','out7'],
+  // Webhooks → n8n
+  ['wh1','n1'], ['wh2','n1'], ['wh3','n1'], ['wh4','n1'], ['wh5','n1'],
+  // n8n → n8n
+  ['n1','n2'], ['n2','n3'], ['n3','n4'],
+  // n8n → DB
+  ['n1','db1'], ['n1','db2'], ['n2','db1'],
+  ['n5','db2'], ['n6','db2'], ['n7','db1'],
+  ['n11','db1'],
+  // DB → DB
+  ['db1','db3'], ['db3','db4'],
+  // n8n → CRM/Platforms
+  ['n2','crm4'], ['n4','crm4'], ['n6','crm4'],
+  ['n8','crm1'], ['n8','crm2'], ['n8','crm3'],
+  ['n9','crm1'], ['n10','db2'], ['n5','db2'],
+  // n8n → Agents
+  ['n3','ag3'], ['ev10','ag1'], ['ev10','ag4'],
+  // Agents → Output
+  ['ag1','out4'], ['ag2','out4'], ['ag3','out1'],
+  ['ag4','db2'], ['ag5','out5'], ['ag6','db1'],
+  // n8n → Output
+  ['n4','out1'], ['n7','out6'],
+  // CRM → Output
+  ['crm1','out2'], ['crm2','out2'], ['crm3','out2'],
+  ['crm4','out3'], ['crm5','out4'], ['crm6','out5'],
+  // Agents → Reports
+  ['ag5','out5'],
+];
+
+const colors = {
+  ev:'#f59e0b', wh:'#ef4444', n:'#6366f1',
+  db:'#22c55e', crm:'#3b82f6', ag:'#d946ef', out:'#484f58'
+};
+
+function getColor(id) {
+  for(const [prefix, color] of Object.entries(colors)) {
+    if(id.startsWith(prefix)) return color;
+  }
+  return '#484f58';
+}
+
+function getMidPoint(el) {
+  const wrap = document.getElementById('flow-wrap');
+  const wrapRect = wrap.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left - wrapRect.left + rect.width / 2,
+    y: rect.top - wrapRect.top + rect.height / 2,
+    right: rect.right - wrapRect.left,
+    left: rect.left - wrapRect.left
+  };
+}
+
+function drawLines() {
+  const svg = document.getElementById('svg-lines');
+  const wrap = document.getElementById('flow-wrap');
+  svg.setAttribute('viewBox', `0 0 ${wrap.offsetWidth} ${wrap.offsetHeight}`);
+  svg.innerHTML = '';
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  svg.appendChild(defs);
+
+  for(const [fromId, toId] of connections) {
+    const fromEl = document.getElementById(fromId);
+    const toEl = document.getElementById(toId);
+    if(!fromEl || !toEl) continue;
+
+    const from = getMidPoint(fromEl);
+    const to = getMidPoint(toEl);
+    const color = getColor(fromId);
+
+    const x1 = from.right;
+    const y1 = from.y;
+    const x2 = to.left;
+    const y2 = to.y;
+    const cx = (x1 + x2) / 2;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`);
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', '1');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('opacity', '0.35');
+    svg.appendChild(path);
+  }
+}
+
+window.addEventListener('load', () => setTimeout(drawLines, 100));
+window.addEventListener('resize', drawLines);
+</script>
+</body>
+</html>

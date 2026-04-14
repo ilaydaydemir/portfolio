@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ilayda End to End System Build</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#0d1117;font-family:'Inter',sans-serif;overflow:hidden;color:#cdd9e5}
+  #toolbar{position:fixed;top:0;left:0;right:0;height:36px;background:#161b22;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:20;gap:12px}
+  #toolbar-title{font-size:12px;font-weight:500;color:#8b949e;letter-spacing:.02em;white-space:nowrap}
+  #toolbar-center{display:flex;align-items:center;gap:8px;flex:1;justify-content:center}
+  #search{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:4px 12px;font-family:'Inter',sans-serif;font-size:11px;color:#cdd9e5;outline:none;width:280px;transition:border-color .15s}
+  #search::placeholder{color:#484f58}
+  #search:focus{border-color:#d946ef}
+  .tb-btn{background:#21262d;border:1px solid #30363d;border-radius:6px;padding:3px 10px;font-size:10px;color:#8b949e;cursor:pointer;transition:background .15s}
+  .tb-btn:hover{background:#30363d;color:#cdd9e5}
+  #toolbar-right{font-size:10px;color:#484f58;white-space:nowrap}
+  #graph-wrap{position:fixed;top:36px;left:0;right:0;bottom:0}
+  svg{width:100%;height:100%;cursor:grab}
+  svg:active{cursor:grabbing}
+  .node-label{font-family:'Inter',sans-serif;font-size:9px;fill:#6e7681;pointer-events:none;user-select:none}
+  #panel{position:fixed;top:52px;right:12px;width:245px;background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px;z-index:20;opacity:0;transform:translateX(8px);transition:opacity .2s,transform .2s;pointer-events:none;max-height:calc(100vh - 80px);overflow-y:auto}
+  #panel.visible{opacity:1;transform:translateX(0);pointer-events:auto}
+  #panel-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+  #panel-name{font-size:13px;font-weight:500;color:#e6edf3;margin-bottom:8px;line-height:1.4}
+  #panel-desc{font-size:10px;color:#8b949e;line-height:1.6;margin-bottom:10px}
+  #panel-conns{font-size:10px;color:#484f58;border-top:1px solid #21262d;padding-top:8px}
+  #panel-conns span{color:#d946ef;font-weight:500}
+  #legend{position:fixed;bottom:12px;left:12px;z-index:20;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;background:rgba(13,17,23,.93);padding:10px 14px;border-radius:8px;border:1px solid #21262d}
+  .leg-item{display:flex;align-items:center;gap:6px;font-size:8px;color:#6e7681}
+  .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <div id="toolbar-title">Ilayda — End to End System Build</div>
+  <div id="toolbar-center">
+    <input id="search" type="text" placeholder="Search agents, managed, commands, workflows…" autocomplete="off">
+    <button class="tb-btn" onclick="resetView()">Reset</button>
+    <button class="tb-btn" onclick="clearSel()">Clear</button>
+  </div>
+  <div id="toolbar-right"><span id="sn">—</span> nodes &nbsp;·&nbsp; <span id="sl">—</span> links</div>
+</div>
+<div id="graph-wrap"><svg id="graph"></svg></div>
+<div id="panel">
+  <div id="panel-badge"></div>
+  <div id="panel-name"></div>
+  <div id="panel-desc"></div>
+  <div id="panel-conns">Connections: <span id="pcc">0</span></div>
+</div>
+<div id="legend"></div>
+
+<script>
+const NODES=[{"id": "ev-email-reply", "label": "Email Reply", "cat": "event", "desc": "Lead replies to email via EmailBison / SmartLead / LemList"}, {"id": "ev-li-reply", "label": "LinkedIn Reply", "cat": "event", "desc": "Lead replies on LinkedIn via HeyReach"}, {"id": "ev-msg-sent", "label": "Message Sent", "cat": "event", "desc": "Any outbound message sent to a lead on any platform"}, {"id": "ev-imessage", "label": "iMessage Received", "cat": "event", "desc": "Inbound iMessage via Linq"}, {"id": "ev-crm-deal", "label": "CRM Deal / Lifecycle", "cat": "event", "desc": "HubSpot deal created or lifecycle stage changed, or SalesForce opportunity"}, {"id": "ev-typeform", "label": "TypeForm Submit", "cat": "event", "desc": "Website intake form submitted"}, {"id": "ev-slack-msg", "label": "Slack Message", "cat": "event", "desc": "Message posted to any Slack channel"}, {"id": "ev-calendly", "label": "Calendly Booking", "cat": "event", "desc": "Meeting booked via Calendly"}, {"id": "ev-cron", "label": "Cron Timer", "cat": "event", "desc": "Hourly / daily / weekly scheduled trigger"}, {"id": "ev-user-cmd", "label": "User Command", "cat": "event", "desc": "User runs a slash command in Context OS (Claude Code)"}, {"id": "ev-airtable-btn", "label": "Airtable Button", "cat": "event", "desc": "Button clicked or record changed in Airtable"}, {"id": "ev-github-dispatch", "label": "GitHub Dispatch", "cat": "event", "desc": "n8n fires repository_dispatch \u2192 brief-batch workflow"}, {"id": "wh-emailbison", "label": "EmailBison Webhook", "cat": "webhook", "desc": "Master webhook receives reply / bounce / opt_out / sent events"}, {"id": "wh-heyreach", "label": "HeyReach Webhook", "cat": "webhook", "desc": "Master webhook: reply, connection_accepted, sent, message_request"}, {"id": "wh-smartlead", "label": "SmartLead Webhook", "cat": "webhook", "desc": "Master webhook: reply, bounce, opt_out, sent"}, {"id": "wh-lemlist", "label": "LemList Webhook", "cat": "webhook", "desc": "Master webhook: reply, bounce, opt_out"}, {"id": "wh-linq", "label": "Linq Webhook", "cat": "webhook", "desc": "Inbound iMessage reply handler"}, {"id": "n8-lead-tagging", "label": "Lead Tagging", "cat": "n8n", "desc": "9 platform-specific workflows. Classify inbound \u2192 Supabase + Airtable dual write"}, {"id": "n8-reply-router", "label": "Reply Category Router", "cat": "n8n", "desc": "72-node central router \u2192 CRM + Slack. Routes every classified reply"}, {"id": "n8-reply-agent", "label": "Reply Agent", "cat": "n8n", "desc": "55-node AI reply generator. Posts Slack approval card with action buttons"}, {"id": "n8-reply-approve", "label": "Reply Approve", "cat": "n8n", "desc": "Sends approved reply via original platform (EmailBison / HeyReach / Linq)"}, {"id": "n8-reply-regen", "label": "Reply Regenerate", "cat": "n8n", "desc": "Overwrites generated_responses with new AI reply"}, {"id": "n8-reply-badicp", "label": "Reply Bad ICP", "cat": "n8n", "desc": "Marks lead as bad ICP \u2192 Supabase bad_icps table"}, {"id": "n8-reply-reclassify", "label": "Reply Reclassify", "cat": "n8n", "desc": "Updates category in Supabase inbound_messages"}, {"id": "n8-activity-router", "label": "Activity Router", "cat": "n8n", "desc": "Routes activity to correct CRM: HubSpot / SalesForce / Attio per client"}, {"id": "n8-deal-tagging", "label": "Deal Tagging", "cat": "n8n", "desc": "Tags HubSpot / SalesForce deals with outreach source, campaign, channel"}, {"id": "n8-blocklist", "label": "Blocklist / DNC", "cat": "n8n", "desc": "Per-client blocklist propagation \u2192 Supabase + EmailBison + HeyReach + SmartLead"}, {"id": "n8-workspace-onboard", "label": "Workspace Onboarding", "cat": "n8n", "desc": "Creates Slack channels, updates Airtable Clients workspace fields"}, {"id": "n8-exec-summary", "label": "Daily Exec Summary", "cat": "n8n", "desc": "AI generates executive summary \u2192 Airtable + Slack daily"}, {"id": "n8-campaign-sync", "label": "Campaign Sync", "cat": "n8n", "desc": "Daily sync: EmailBison / SmartLead / HeyReach campaigns \u2192 Airtable"}, {"id": "n8-inbox-sync", "label": "Inbox Sync", "cat": "n8n", "desc": "Daily sync of email inboxes \u2192 Airtable Inboxes"}, {"id": "n8-trend-sync", "label": "Trend Sync", "cat": "n8n", "desc": "Daily stats per platform \u2192 Airtable Trends"}, {"id": "n8-attribution", "label": "Attribution Stats", "cat": "n8n", "desc": "Per-client stats push \u2192 HubSpot / SalesForce attribution merge \u2192 Airtable"}, {"id": "n8-autopause", "label": "Campaign Auto-Pause", "cat": "n8n", "desc": "Pauses campaigns past their stop date across all sending platforms"}, {"id": "n8-sla-sync", "label": "SLA Timestamp Sync", "cat": "n8n", "desc": "Calculates SLA + time-to-response for inbound_messages daily"}, {"id": "n8-calendly-crm", "label": "Calendly \u2192 CRM", "cat": "n8n", "desc": "Syncs Calendly meetings \u2192 HubSpot / Attio activity timeline"}, {"id": "n8-post-call", "label": "Post Call Analysis", "cat": "n8n", "desc": "AI call analysis from Airtable button \u2192 Client Calls table"}, {"id": "n8-slack-logger", "label": "Slack Message Logger", "cat": "n8n", "desc": "Logs all Slack messages \u2192 Supabase slack_messages table"}, {"id": "n8-airtable-sync", "label": "Airtable \u2192 Supabase", "cat": "n8n", "desc": "Syncs Airtable Clients record changes \u2192 Supabase clients UPSERT"}, {"id": "n8-error-monitor", "label": "Error Monitor", "cat": "n8n", "desc": "Catches n8n errors \u2192 Slack #alerts + Google Sheets error log"}, {"id": "db-supabase", "label": "Supabase", "cat": "database", "desc": "Primary database. Tables: inbound_messages, outreach_events, generated_responses, blocklist_entries, leads, clients, slack_messages, bad_icps"}, {"id": "db-airtable", "label": "Airtable", "cat": "database", "desc": "Operational hub. Tables: Replies, Campaigns, Inboxes, Variants, Trends, Task Hub, Clients, LinkedIn Accounts, Client Calls"}, {"id": "crm-hubspot", "label": "HubSpot", "cat": "crm", "desc": "CRM for Capitalize, Gumption, Lucra Sports, MEXT. Activities, deals, contacts"}, {"id": "crm-salesforce", "label": "SalesForce", "cat": "crm", "desc": "CRM for Crux, RemoteLock. Opportunity creation, activity logging"}, {"id": "crm-attio", "label": "Attio", "cat": "crm", "desc": "CRM for Johnson Capital. Contact upsert + activity logging"}, {"id": "ext-emailbison", "label": "EmailBison", "cat": "action", "desc": "Email sending platform. Reply send, campaign create/pause, blocklist, inbox sync"}, {"id": "ext-heyreach", "label": "HeyReach", "cat": "action", "desc": "LinkedIn outreach platform. Reply send, DNC, campaign sync, account sync"}, {"id": "ext-smartlead", "label": "SmartLead", "cat": "action", "desc": "Email sending. Campaign sync, inbox sync, variant sync, blocklist"}, {"id": "ext-linq", "label": "Linq", "cat": "action", "desc": "iMessage platform. Sends approved iMessage replies to leads"}, {"id": "ext-slack", "label": "Slack", "cat": "action", "desc": "Notifications hub. Reply cards, client channels, standup posts, error alerts"}, {"id": "ext-gdrive", "label": "Google Drive", "cat": "action", "desc": "Document storage. Campaign briefs (.docx), weekly briefs, client reports"}, {"id": "ext-gsheets", "label": "Google Sheets", "cat": "action", "desc": "Airtable field cache, error log, qualified lead output"}, {"id": "db-trigger-updated-at", "label": "set_updated_at()", "cat": "database", "desc": "DB trigger: fires BEFORE UPDATE on all ~30 mutable tables. Sets updated_at = now()"}, {"id": "db-trigger-domain", "label": "enforce_domain()", "cat": "database", "desc": "DB trigger: validates @system.co email on 14 tables. Rejects unauthorized actors"}, {"id": "db-trigger-clean", "label": "clean_data_fields()", "cat": "database", "desc": "DB trigger: normalizes domain and linkedin_url on companies + leads tables"}, {"id": "db-trigger-newuser", "label": "handle_new_user()", "cat": "database", "desc": "DB trigger: auto-creates profile on auth.users insert. Rejects non-system email"}, {"id": "db-pgmq", "label": "PGMQ Queues", "cat": "database", "desc": "Message queues: agent_runs, signal_processing, cag_rebuilds, dead_letter"}, {"id": "sch-hourly-trend", "label": "Hourly Trend Refresh", "cat": "schedule", "desc": "Refreshes today's trend data every hour across all platforms"}, {"id": "sch-daily-morning", "label": "Daily Morning Jobs", "cat": "schedule", "desc": "Campaign sync, inbox sync, variant sync, trend sync, exec summary \u2014 fires each morning"}, {"id": "sch-weekly", "label": "Weekly Jobs", "cat": "schedule", "desc": "Last week trend refresh, Airtable field name cache \u2014 fires Monday"}, {"id": "os-qualify", "label": "/qualify", "cat": "os", "desc": "B2B qualification pipeline \u2192 Supabase blocklist check \u2192 Google Sheets output"}, {"id": "os-copywrite", "label": "/copywrite", "cat": "os", "desc": "GEX copy generation \u2192 OpenRouter LLM \u2192 Google Sheets"}, {"id": "os-brief-batch", "label": "/brief-batch", "cat": "os", "desc": "Campaign brief assembly \u2192 Airtable tasks + campaigns \u2192 Google Drive .docx"}, {"id": "os-weekly-briefs", "label": "/weekly-briefs", "cat": "os", "desc": "Per-client weekly briefs \u2192 n8n webhook \u2192 Google Drive + Slack + local"}, {"id": "os-standup", "label": "/standup", "cat": "os", "desc": "Dev standup \u2192 Airtable tasks + sprints \u2192 .docx + Google Doc + Slack"}, {"id": "os-client-report", "label": "/client-report", "cat": "os", "desc": "Client status report \u2192 Airtable + Supabase \u2192 Markdown + profile.md update"}, {"id": "os-blocklist", "label": "blocklist-lead", "cat": "os", "desc": "Add to blocklist \u2192 Supabase + EmailBison + HeyReach simultaneously"}, {"id": "os-lead-remove", "label": "lead-remove", "cat": "os", "desc": "Remove lead from active campaigns \u2192 EmailBison + HeyReach"}, {"id": "gh-brief-batch", "label": "brief-batch Action", "cat": "github", "desc": "3-step GitHub Action: pre_process \u2192 generate_copy (Claude API) \u2192 post_process \u2192 Google Drive .docx"}, {"id": "ef-edge-fn", "label": "Edge Functions", "cat": "database", "desc": "10 Supabase edge functions. Consumed by PGMQ queues for agent runs, signals, CAG rebuilds"}, {"id": "rule-writing", "label": "writing-standards", "cat": "rule", "desc": "No em dashes, no filler, no AI tells. Active voice. stop-slop before any external delivery."}, {"id": "rule-research", "label": "research-discipline", "cat": "rule", "desc": "One official source default. No blog posts. Ask before expanding. Deep dive only on explicit request."}, {"id": "rule-resource", "label": "resource-management", "cat": "rule", "desc": "Launch and release \u2014 no babysitting. Checkpoint every 50-100 items. Parallel 5-chunk execution."}, {"id": "rule-reflect", "label": "post-task-reflection", "cat": "rule", "desc": "After multi-step tasks: what could be faster or skipped? Suggest CLAUDE.md updates for recurring patterns."}, {"id": "agent-onboard", "label": "client-onboarding-agent", "cat": "agent", "desc": "Input: client slug. Reads profile + campaigns + performance + ICP + notes. Output: actionable onboarding brief under 2 pages."}, {"id": "agent-report", "label": "client-report-agent", "cat": "agent", "desc": "Input: client slug. Pulls Airtable + Supabase live data. Output: Executive Summary, Campaigns, Trends, ICP Health, Actions."}, {"id": "agent-ingest", "label": "ingestion-agent", "cat": "agent", "desc": "Input: raw content. Extracts atomic concepts \u2192 YAML frontmatter + wiki-links \u2192 knowledge_base/ nodes."}, {"id": "plugin-campaign", "label": "campaign-tools plugin", "cat": "plugin", "desc": "5 .docx generators: campaign brief, internal brief, copy doc, performance analysis, roles doc. 4 skills bundled."}, {"id": "plugin-callprep", "label": "call-prep plugin", "cat": "plugin", "desc": "1 generator: generate_weekly_brief.js. 1 skill: client-call-prep. White-mode design (Inter/Montserrat)."}, {"id": "cmd-qualify", "label": "/qualify", "cat": "command", "desc": "B2B qualification: domain discovery \u2192 DNC check \u2192 B2B classify \u2192 company grade. 5-chunk parallel, checkpointing."}, {"id": "cmd-surface", "label": "/surface", "cat": "command", "desc": "ICP enrichment. Phase 1: buyer intelligence. Phase 2: buying signals via LinkUp (hiring, funding, tech)."}, {"id": "cmd-copywrite", "label": "/copywrite", "cat": "command", "desc": "GEX method cold email: 3 emails \u00d7 3 variants per lead. Signal personalization + stop-slop QA."}, {"id": "cmd-pipeline-status", "label": "/pipeline-status", "cat": "command", "desc": "Dashboard: stage counts per client \u2014 Unprocessed \u2192 Qualified \u2192 Researched \u2192 Signaled \u2192 Written."}, {"id": "cmd-phone-enrich", "label": "/phone-enrich", "cat": "command", "desc": "Non-responding leads \u2192 LeadMagic cascade (direct \u2192 company \u2192 LinkedIn) \u2192 enriched CSV."}, {"id": "cmd-map-companies", "label": "/map-companies", "cat": "command", "desc": "Maps graded company CSV back to raw person-level export. Removes disqualified rows."}, {"id": "cmd-new-icp", "label": "/new-icp", "cat": "command", "desc": "Scaffolds execution/clients/{client}/icps/{name}/ with 4 YAML templates."}, {"id": "cmd-brief-batch", "label": "/brief-batch", "cat": "command", "desc": "Assembly-line batch briefs from Airtable tasks. GEX copy \u2192 .docx \u2192 Drive \u2192 Slack \u2192 Airtable done."}, {"id": "cmd-weekly-briefs", "label": "/weekly-briefs", "cat": "command", "desc": "Batch all clients where meeting_day = today. Per client: webhook \u2192 markdown \u2192 .docx \u2192 Drive \u2192 Slack."}, {"id": "cmd-weekly-brief-single", "label": "/weekly-brief-single", "cat": "command", "desc": "Single client weekly brief. Fetch webhook \u2192 markdown \u2192 .docx \u2192 Drive \u2192 archive \u2192 Slack."}, {"id": "cmd-client-new", "label": "/client-new", "cat": "command", "desc": "Scaffold 01_clients/{slug}/ with 6 standard files from templates + notes/ directory."}, {"id": "cmd-client-ingest", "label": "/client-ingest", "cat": "command", "desc": "Unified ingestion: stage \u2192 classify \u2192 populate 6 files \u2192 extract knowledge_base concepts."}, {"id": "cmd-client-report", "label": "/client-report", "cat": "command", "desc": "Delegates to client-report-agent. Real-time Airtable + Supabase metrics with benchmarks."}, {"id": "cmd-standup", "label": "/standup", "cat": "command", "desc": "Dev standup: sprint analysis \u2192 AI recommendations \u2192 .docx + Slack + Google Doc."}, {"id": "cmd-sprint-plan", "label": "/sprint-plan", "cat": "command", "desc": "Sprint planning: carryover \u2192 capacity budget \u2192 backlog rank \u2192 sprint goal \u2192 doc."}, {"id": "cmd-sprint-review", "label": "/sprint-review", "cat": "command", "desc": "Retrospective: scorecard, velocity, completed, carryover, retro prompts \u2192 doc + Slack."}, {"id": "cmd-exec-report", "label": "/exec-report", "cat": "command", "desc": "Weekly eng exec report: sprint metrics, velocity, risks, next week \u2192 doc + Slack DM."}, {"id": "cmd-create-prd", "label": "/create-prd", "cat": "command", "desc": "PRD from feature idea \u2192 save to 02_product/prds/ \u2192 Google Doc \u2192 Slack notify."}, {"id": "cmd-gen-tasks", "label": "/generate-tasks", "cat": "command", "desc": "PRD \u2192 Airtable tasks with complexity (XS\u2192XL), epic links, capacity analysis."}, {"id": "cmd-gtm-standup", "label": "/gtm-standup", "cat": "command", "desc": "Daily GTM standup: alerts + operator status + client health + 7-day launch tracker \u2192 Slack #ops."}, {"id": "cmd-gtm-exec", "label": "/gtm-exec-report", "cat": "command", "desc": "Weekly GTM exec: operator scorecards, client health trends, pipeline depletion forecast."}, {"id": "cmd-ingest", "label": "/ingest", "cat": "command", "desc": "Raw content \u2192 knowledge nodes via ingestion-agent. Cross-client methodology only."}, {"id": "cmd-graph-health", "label": "/graph-health", "cat": "command", "desc": "Tag sprawl, broken wiki-links, orphan nodes, stale emergent nodes, missing concepts."}, {"id": "cmd-session-close", "label": "/session-close", "cat": "command", "desc": "Summarize session \u2192 log \u2192 capture ops discoveries to MEMORY.md \u2192 route client context."}, {"id": "cmd-ops-review", "label": "/ops-review", "cat": "command", "desc": "Synthesize bottleneck log \u2192 top patterns by frequency \u00d7 impact \u2192 backlog suggestions."}, {"id": "sk-campaign-copy", "label": "Campaign & Copy Skills", "cat": "skill", "desc": "campaign-brief, campaign-copywriting, linkedin-copywriting, cold-email-copywriter, brief-batch, campaign-execution, connector-pipeline, conference-list."}, {"id": "sk-client-ops", "label": "Client Ops Skills", "cat": "skill", "desc": "client-call-prep, client-data, client-intelligence, client-onboarding-guide, gtm-client-strategy."}, {"id": "sk-doc-gen", "label": "Doc Generation Skills", "cat": "skill", "desc": "aicro-brand, aicro-docx, aicro-pptx, excalidraw-diagram, icp-card-generator, tofu-agent-creator."}, {"id": "sk-lead-ops", "label": "Lead Ops Skills", "cat": "skill", "desc": "blocklist-lead, lead-remove-from-outreach, pre-enrichment-dnc, phone-enrichment, revbase-list-builder."}, {"id": "sk-platform", "label": "Platform Tool Skills", "cat": "skill", "desc": "emailbison-add-team-member, slack-channel-invite, playwright-cli."}, {"id": "sk-meta", "label": "Meta & Quality Skills", "cat": "skill", "desc": "stop-slop, prompt-engineering, skill-creator, context-grounding, using-superpowers, frontend-design."}, {"id": "mcp-supabase", "label": "Supabase MCP", "cat": "mcp", "desc": "9 tools: query_table, search_lead, upsert_lead, search_company, upsert_company, check_blocklist, add_to_blocklist, search_bad_icps, check_lead_safety."}, {"id": "mcp-airtable", "label": "Airtable MCP", "cat": "mcp", "desc": "19 tools: list_clients, get_client, get_campaigns, get_tasks, get_sprints, get_replies, update_record, create_record, query_table + 10 more."}, {"id": "mcp-emailbison", "label": "EmailBison MCP", "cat": "mcp", "desc": "164 tools: workspaces, campaigns, leads, inboxes, blocklist, analytics, sequences, team, webhooks, domains, warmup, sending, templates."}, {"id": "mcp-heyreach", "label": "HeyReach MCP", "cat": "mcp", "desc": "48 tools: campaigns, leads, LinkedIn accounts, DNC list, sequences, analytics, connection management."}, {"id": "mcp-excalidraw", "label": "Excalidraw MCP", "cat": "mcp", "desc": "26 tools for diagram creation and editing via MCP or REST."}, {"id": "scripts-qualify", "label": "Qualify Scripts", "cat": "script", "desc": "find_domains_linkup.py, surface_domains.py, dnc_check.py, classify_b2b_linkup.py, grade_companies.py. LinkUp + OpenRouter."}, {"id": "scripts-surface", "label": "Surface Scripts", "cat": "script", "desc": "surface_variables.py (buyer intelligence), signal scripts (hiring/funding/tech via LinkUp API)."}, {"id": "scripts-copy", "label": "Copy Scripts", "cat": "script", "desc": "prep_campaign.py, copywrite_connector.py. Output to Google Sheets."}, {"id": "scripts-docgen", "label": "Doc Gen Scripts", "cat": "script", "desc": "generate_campaign_brief.js, generate_weekly_brief.js, generate_standup.js, accept_changes.py, pack/unpack.py."}, {"id": "scripts-phone", "label": "Phone Enrich Scripts", "cat": "script", "desc": "phone_enrich_fetch.py \u2192 LeadMagic API cascade \u2192 enriched CSV output."}, {"id": "clients-folder", "label": "01_clients/", "cat": "folder", "desc": "All client folders: campaigns, performance, ICP, notes, briefs, SOPs, contacts. 14 active clients."}, {"id": "ag-1-client-brief", "label": "Agent 1 \u00b7 Client Brief", "cat": "agent", "desc": "Reads all client files + website. Produces client_summary_brief.md \u2014 ICP, proof, framing, risks, hesitations. Haiku model."}, {"id": "ag-2-campaign-brief", "label": "Agent 2 \u00b7 Campaign Brief", "cat": "agent", "desc": "Takes client_summary_brief + selected campaign + signal. Derives ICP priority, hard exclusions, proof scoring, E1/E2/E3 value progression."}, {"id": "ag-3-email-policy", "label": "Agent 3 \u00b7 Email Policy", "cat": "agent", "desc": "Converts guardrails + campaign brief \u2192 campaign_email_policy.json. Defines writing rules, signal usage, CTA rules, proof by touch, QA hooks."}, {"id": "ag-4-email-writer", "label": "Agent 4 \u00b7 Email Writer", "cat": "agent", "desc": "Classifies + routes each prospect row, resolves writing lens, generates final outreach outputs. Contains internal routing sub-agents."}, {"id": "ag-5-sheet-exec", "label": "Agent 5 \u00b7 Sheet Execution", "cat": "agent", "desc": "Reads Step 4 bundles, writes routing metadata + final messages to sheet columns. First layer allowed to modify the live sheet."}, {"id": "ag-6-policy-qa", "label": "Agent 6 \u00b7 Policy QA", "cat": "agent", "desc": "Final QA and polish. Checks compliance vs guardrails + campaign policy. Applies safe micro-edits. Flags strategic rewrites."}, {"id": "ag-row-writer", "label": "Row Writer", "cat": "agent", "desc": "Writes complete Client row: E1+E2+E3+DM1+DM2+subjects+reasoning. One subagent per row, no batch contamination. Reads COPY_RULES.md."}, {"id": "ag-row-writer-v2", "label": "Row Writer v2", "cat": "agent", "desc": "Self-contained. All rules inline. Writes E1+E2+E3+DM1+DM2+subjects+reasoning with refined Sammy formula, cross-firm proofs, 3-tier CTA."}, {"id": "ag-row-sharpener", "label": "Row Sharpener", "cat": "agent", "desc": "Runs AFTER writer, BEFORE QA. Surfaces strategic reasoning, sentence-level sharpens against Master Principles. Catches what QA's mechanical checks miss."}, {"id": "ag-row-qa", "label": "Row QA", "cat": "agent", "desc": "Final QA gate. Checks tone consistency, value angles, persona-appropriate angles, HTML validity, locked/banned phrases, word counts."}, {"id": "ag-row-qa-v2", "label": "Row QA v2", "cat": "agent", "desc": "Extended QA: asset class qualification, brand normalization, HTML entity decode, parrot prevention, DM greeting check, 3-paragraph E1 structure."}, {"id": "ag-row-evaluator", "label": "Row Evaluator", "cat": "agent", "desc": "Sheet-level evaluator. Judges ICP fit, value uniqueness, sender tone, banned phrases, same-firm conflicts. Outputs SKIP/REWRITE/OK per row. Does NOT rewrite."}, {"id": "ag-prefilter-grade", "label": "Prefilter Grade Agent", "cat": "agent", "desc": "Combined ICP scan + company grade (A/B/C/D) + person grade for up to 200 rows per chunk. Returns structured JSON. Called by campaign-builder orchestrator."}, {"id": "ma-api", "label": "Managed Agents API", "cat": "managed", "desc": "POST /v1/agents \u2014 creates agent resource (model + system prompt + tools + MCP servers). Referenced by ID + version. PUT creates new version. Sessions pin to specific agent version."}, {"id": "ma-session", "label": "Managed Session", "cat": "managed", "desc": "Full Linux container, persistent filesystem, pre-installed packages. Sessions run for hours. Stateful \u2014 can be steered or interrupted mid-execution. Prompt caching + compaction + context editing built-in."}, {"id": "ma-tools", "label": "Built-in Tools", "cat": "managed", "desc": "Bash execution, file operations, web search, web fetch \u2014 all run natively in the sandbox. Custom tools routed via SSE events to application for fulfillment."}, {"id": "ma-sse", "label": "SSE Event Stream", "cat": "managed", "desc": "Server-sent events: session.status_idle, tool_use, content, completion. GET /sessions/{id}/events for positional slicing. Token usage included. Consumed by Cortex to write back to runs + lessons."}, {"id": "ma-credentials", "label": "Credential Vault", "cat": "managed", "desc": "Tokens never reachable from sandbox. Git tokens bundled at clone-time. MCP OAuth via secure proxy. Session-scoped tokens stored outside sandbox. Stronger isolation than Edge Function approach."}];
+const LINKS=[{"source": "ev-email-reply", "target": "wh-emailbison"}, {"source": "ev-email-reply", "target": "wh-smartlead"}, {"source": "ev-email-reply", "target": "wh-lemlist"}, {"source": "ev-li-reply", "target": "wh-heyreach"}, {"source": "ev-msg-sent", "target": "wh-emailbison"}, {"source": "ev-msg-sent", "target": "wh-heyreach"}, {"source": "ev-msg-sent", "target": "wh-smartlead"}, {"source": "ev-imessage", "target": "wh-linq"}, {"source": "ev-crm-deal", "target": "n8-blocklist"}, {"source": "ev-typeform", "target": "db-supabase"}, {"source": "ev-slack-msg", "target": "n8-slack-logger"}, {"source": "ev-calendly", "target": "n8-calendly-crm"}, {"source": "ev-cron", "target": "sch-hourly-trend"}, {"source": "ev-cron", "target": "sch-daily-morning"}, {"source": "ev-cron", "target": "sch-weekly"}, {"source": "ev-user-cmd", "target": "os-qualify"}, {"source": "ev-user-cmd", "target": "os-copywrite"}, {"source": "ev-user-cmd", "target": "os-brief-batch"}, {"source": "ev-user-cmd", "target": "os-weekly-briefs"}, {"source": "ev-user-cmd", "target": "os-standup"}, {"source": "ev-user-cmd", "target": "os-client-report"}, {"source": "ev-user-cmd", "target": "os-blocklist"}, {"source": "ev-user-cmd", "target": "os-lead-remove"}, {"source": "ev-airtable-btn", "target": "n8-airtable-sync"}, {"source": "ev-airtable-btn", "target": "n8-post-call"}, {"source": "ev-github-dispatch", "target": "gh-brief-batch"}, {"source": "wh-emailbison", "target": "n8-lead-tagging"}, {"source": "wh-heyreach", "target": "n8-lead-tagging"}, {"source": "wh-smartlead", "target": "n8-lead-tagging"}, {"source": "wh-lemlist", "target": "n8-lead-tagging"}, {"source": "wh-linq", "target": "n8-lead-tagging"}, {"source": "wh-emailbison", "target": "n8-reply-router"}, {"source": "wh-heyreach", "target": "n8-reply-router"}, {"source": "wh-smartlead", "target": "n8-reply-router"}, {"source": "wh-lemlist", "target": "n8-reply-router"}, {"source": "n8-lead-tagging", "target": "db-supabase"}, {"source": "n8-lead-tagging", "target": "db-airtable"}, {"source": "n8-reply-router", "target": "n8-reply-agent"}, {"source": "n8-reply-router", "target": "crm-hubspot"}, {"source": "n8-reply-router", "target": "ext-slack"}, {"source": "n8-reply-router", "target": "db-supabase"}, {"source": "n8-reply-agent", "target": "ext-slack"}, {"source": "n8-reply-agent", "target": "db-supabase"}, {"source": "n8-reply-approve", "target": "ext-emailbison"}, {"source": "n8-reply-approve", "target": "ext-heyreach"}, {"source": "n8-reply-approve", "target": "ext-linq"}, {"source": "n8-reply-approve", "target": "db-supabase"}, {"source": "n8-reply-regen", "target": "db-supabase"}, {"source": "n8-reply-badicp", "target": "db-supabase"}, {"source": "n8-reply-reclassify", "target": "db-supabase"}, {"source": "ext-slack", "target": "n8-reply-approve"}, {"source": "ext-slack", "target": "n8-reply-regen"}, {"source": "ext-slack", "target": "n8-reply-badicp"}, {"source": "ext-slack", "target": "n8-reply-reclassify"}, {"source": "n8-reply-router", "target": "n8-activity-router"}, {"source": "n8-activity-router", "target": "crm-hubspot"}, {"source": "n8-activity-router", "target": "crm-salesforce"}, {"source": "n8-activity-router", "target": "crm-attio"}, {"source": "n8-deal-tagging", "target": "crm-hubspot"}, {"source": "n8-deal-tagging", "target": "crm-salesforce"}, {"source": "n8-blocklist", "target": "db-supabase"}, {"source": "n8-blocklist", "target": "ext-emailbison"}, {"source": "n8-blocklist", "target": "ext-heyreach"}, {"source": "n8-blocklist", "target": "ext-smartlead"}, {"source": "crm-hubspot", "target": "n8-blocklist"}, {"source": "crm-salesforce", "target": "n8-blocklist"}, {"source": "sch-hourly-trend", "target": "n8-trend-sync"}, {"source": "sch-daily-morning", "target": "n8-campaign-sync"}, {"source": "sch-daily-morning", "target": "n8-inbox-sync"}, {"source": "sch-daily-morning", "target": "n8-trend-sync"}, {"source": "sch-daily-morning", "target": "n8-attribution"}, {"source": "sch-daily-morning", "target": "n8-exec-summary"}, {"source": "sch-daily-morning", "target": "n8-autopause"}, {"source": "sch-daily-morning", "target": "n8-sla-sync"}, {"source": "sch-daily-morning", "target": "n8-calendly-crm"}, {"source": "sch-weekly", "target": "n8-trend-sync"}, {"source": "n8-campaign-sync", "target": "db-airtable"}, {"source": "n8-inbox-sync", "target": "db-airtable"}, {"source": "n8-trend-sync", "target": "db-airtable"}, {"source": "n8-attribution", "target": "crm-hubspot"}, {"source": "n8-attribution", "target": "crm-salesforce"}, {"source": "n8-attribution", "target": "db-airtable"}, {"source": "n8-exec-summary", "target": "db-airtable"}, {"source": "n8-exec-summary", "target": "ext-slack"}, {"source": "n8-autopause", "target": "ext-emailbison"}, {"source": "n8-autopause", "target": "ext-smartlead"}, {"source": "n8-sla-sync", "target": "db-supabase"}, {"source": "n8-calendly-crm", "target": "crm-hubspot"}, {"source": "n8-calendly-crm", "target": "crm-attio"}, {"source": "n8-workspace-onboard", "target": "ext-slack"}, {"source": "n8-workspace-onboard", "target": "db-airtable"}, {"source": "n8-post-call", "target": "db-airtable"}, {"source": "n8-slack-logger", "target": "db-supabase"}, {"source": "n8-airtable-sync", "target": "db-supabase"}, {"source": "n8-error-monitor", "target": "ext-slack"}, {"source": "n8-error-monitor", "target": "ext-gsheets"}, {"source": "os-qualify", "target": "db-supabase"}, {"source": "os-qualify", "target": "ext-gsheets"}, {"source": "os-copywrite", "target": "ext-gsheets"}, {"source": "os-brief-batch", "target": "db-airtable"}, {"source": "os-brief-batch", "target": "ext-gdrive"}, {"source": "os-brief-batch", "target": "ext-slack"}, {"source": "os-weekly-briefs", "target": "ext-gdrive"}, {"source": "os-weekly-briefs", "target": "ext-slack"}, {"source": "os-standup", "target": "db-airtable"}, {"source": "os-standup", "target": "ext-gdrive"}, {"source": "os-standup", "target": "ext-slack"}, {"source": "os-client-report", "target": "db-airtable"}, {"source": "os-client-report", "target": "db-supabase"}, {"source": "os-blocklist", "target": "db-supabase"}, {"source": "os-blocklist", "target": "ext-emailbison"}, {"source": "os-blocklist", "target": "ext-heyreach"}, {"source": "os-lead-remove", "target": "ext-emailbison"}, {"source": "os-lead-remove", "target": "ext-heyreach"}, {"source": "gh-brief-batch", "target": "db-airtable"}, {"source": "gh-brief-batch", "target": "ext-gdrive"}, {"source": "gh-brief-batch", "target": "ext-slack"}, {"source": "db-supabase", "target": "db-trigger-updated-at"}, {"source": "db-supabase", "target": "db-trigger-domain"}, {"source": "db-supabase", "target": "db-trigger-clean"}, {"source": "db-supabase", "target": "db-trigger-newuser"}, {"source": "db-supabase", "target": "db-pgmq"}, {"source": "db-pgmq", "target": "ef-edge-fn"}, {"source": "os-weekly-briefs", "target": "n8-trend-sync"}, {"source": "rule-writing", "target": "ev-user-cmd"}, {"source": "rule-research", "target": "ev-user-cmd"}, {"source": "rule-resource", "target": "ev-user-cmd"}, {"source": "rule-reflect", "target": "ev-user-cmd"}, {"source": "agent-onboard", "target": "mcp-airtable"}, {"source": "agent-onboard", "target": "mcp-supabase"}, {"source": "agent-onboard", "target": "ext-gdrive"}, {"source": "agent-report", "target": "mcp-airtable"}, {"source": "agent-report", "target": "mcp-supabase"}, {"source": "agent-report", "target": "db-supabase"}, {"source": "agent-ingest", "target": "db-supabase"}, {"source": "cmd-client-report", "target": "agent-report"}, {"source": "cmd-ingest", "target": "agent-ingest"}, {"source": "plugin-campaign", "target": "sk-campaign-copy"}, {"source": "plugin-callprep", "target": "sk-client-ops"}, {"source": "cmd-qualify", "target": "scripts-qualify"}, {"source": "cmd-qualify", "target": "mcp-supabase"}, {"source": "cmd-surface", "target": "scripts-surface"}, {"source": "cmd-copywrite", "target": "scripts-copy"}, {"source": "cmd-copywrite", "target": "ext-gsheets"}, {"source": "cmd-phone-enrich", "target": "scripts-phone"}, {"source": "cmd-phone-enrich", "target": "db-supabase"}, {"source": "cmd-pipeline-status", "target": "db-airtable"}, {"source": "cmd-map-companies", "target": "scripts-qualify"}, {"source": "cmd-new-icp", "target": "db-airtable"}, {"source": "scripts-qualify", "target": "mcp-supabase"}, {"source": "scripts-surface", "target": "ext-gsheets"}, {"source": "scripts-copy", "target": "ext-gsheets"}, {"source": "cmd-brief-batch", "target": "mcp-airtable"}, {"source": "cmd-brief-batch", "target": "scripts-docgen"}, {"source": "cmd-brief-batch", "target": "ext-gdrive"}, {"source": "cmd-brief-batch", "target": "ext-slack"}, {"source": "cmd-weekly-briefs", "target": "n8-trend-sync"}, {"source": "cmd-weekly-briefs", "target": "scripts-docgen"}, {"source": "cmd-weekly-briefs", "target": "ext-gdrive"}, {"source": "cmd-weekly-briefs", "target": "ext-slack"}, {"source": "cmd-weekly-brief-single", "target": "scripts-docgen"}, {"source": "cmd-weekly-brief-single", "target": "ext-gdrive"}, {"source": "cmd-weekly-brief-single", "target": "ext-slack"}, {"source": "cmd-client-new", "target": "db-airtable"}, {"source": "cmd-client-ingest", "target": "agent-ingest"}, {"source": "cmd-client-ingest", "target": "db-supabase"}, {"source": "cmd-client-report", "target": "mcp-airtable"}, {"source": "cmd-client-report", "target": "mcp-supabase"}, {"source": "cmd-client-report", "target": "ext-gdrive"}, {"source": "cmd-standup", "target": "mcp-airtable"}, {"source": "cmd-standup", "target": "scripts-docgen"}, {"source": "cmd-standup", "target": "ext-slack"}, {"source": "cmd-standup", "target": "ext-gdrive"}, {"source": "cmd-sprint-plan", "target": "mcp-airtable"}, {"source": "cmd-sprint-plan", "target": "ext-gdrive"}, {"source": "cmd-sprint-review", "target": "mcp-airtable"}, {"source": "cmd-sprint-review", "target": "ext-gdrive"}, {"source": "cmd-sprint-review", "target": "ext-slack"}, {"source": "cmd-exec-report", "target": "mcp-airtable"}, {"source": "cmd-exec-report", "target": "ext-slack"}, {"source": "cmd-create-prd", "target": "ext-gdrive"}, {"source": "cmd-create-prd", "target": "ext-slack"}, {"source": "cmd-gen-tasks", "target": "mcp-airtable"}, {"source": "cmd-gtm-standup", "target": "mcp-airtable"}, {"source": "cmd-gtm-standup", "target": "mcp-supabase"}, {"source": "cmd-gtm-standup", "target": "ext-slack"}, {"source": "cmd-gtm-exec", "target": "mcp-airtable"}, {"source": "cmd-gtm-exec", "target": "ext-slack"}, {"source": "cmd-ingest", "target": "db-supabase"}, {"source": "cmd-graph-health", "target": "db-supabase"}, {"source": "cmd-session-close", "target": "db-supabase"}, {"source": "cmd-ops-review", "target": "db-airtable"}, {"source": "sk-campaign-copy", "target": "mcp-emailbison"}, {"source": "sk-campaign-copy", "target": "mcp-heyreach"}, {"source": "sk-campaign-copy", "target": "scripts-copy"}, {"source": "sk-campaign-copy", "target": "ext-gdrive"}, {"source": "sk-client-ops", "target": "mcp-airtable"}, {"source": "sk-client-ops", "target": "scripts-docgen"}, {"source": "sk-client-ops", "target": "ext-gdrive"}, {"source": "sk-doc-gen", "target": "scripts-docgen"}, {"source": "sk-doc-gen", "target": "ext-gdrive"}, {"source": "sk-lead-ops", "target": "mcp-supabase"}, {"source": "sk-lead-ops", "target": "mcp-emailbison"}, {"source": "sk-lead-ops", "target": "mcp-heyreach"}, {"source": "sk-platform", "target": "mcp-emailbison"}, {"source": "sk-platform", "target": "ext-slack"}, {"source": "sk-meta", "target": "ev-user-cmd"}, {"source": "mcp-supabase", "target": "db-supabase"}, {"source": "mcp-airtable", "target": "db-airtable"}, {"source": "mcp-emailbison", "target": "ext-emailbison"}, {"source": "mcp-heyreach", "target": "ext-heyreach"}, {"source": "ev-user-cmd", "target": "cmd-qualify"}, {"source": "ev-user-cmd", "target": "cmd-surface"}, {"source": "ev-user-cmd", "target": "cmd-copywrite"}, {"source": "ev-user-cmd", "target": "cmd-brief-batch"}, {"source": "ev-user-cmd", "target": "cmd-weekly-briefs"}, {"source": "ev-user-cmd", "target": "cmd-weekly-brief-single"}, {"source": "ev-user-cmd", "target": "cmd-client-new"}, {"source": "ev-user-cmd", "target": "cmd-client-ingest"}, {"source": "ev-user-cmd", "target": "cmd-client-report"}, {"source": "ev-user-cmd", "target": "cmd-standup"}, {"source": "ev-user-cmd", "target": "cmd-sprint-plan"}, {"source": "ev-user-cmd", "target": "cmd-sprint-review"}, {"source": "ev-user-cmd", "target": "cmd-exec-report"}, {"source": "ev-user-cmd", "target": "cmd-create-prd"}, {"source": "ev-user-cmd", "target": "cmd-gen-tasks"}, {"source": "ev-user-cmd", "target": "cmd-gtm-standup"}, {"source": "ev-user-cmd", "target": "cmd-gtm-exec"}, {"source": "ev-user-cmd", "target": "cmd-ingest"}, {"source": "ev-user-cmd", "target": "cmd-graph-health"}, {"source": "ev-user-cmd", "target": "cmd-session-close"}, {"source": "ev-user-cmd", "target": "cmd-ops-review"}, {"source": "ev-user-cmd", "target": "cmd-phone-enrich"}, {"source": "ev-user-cmd", "target": "cmd-pipeline-status"}, {"source": "ev-user-cmd", "target": "cmd-map-companies"}, {"source": "ev-user-cmd", "target": "cmd-new-icp"}, {"source": "os-qualify", "target": "mcp-supabase"}, {"source": "os-blocklist", "target": "mcp-supabase"}, {"source": "os-blocklist", "target": "mcp-emailbison"}, {"source": "os-blocklist", "target": "mcp-heyreach"}, {"source": "os-lead-remove", "target": "mcp-emailbison"}, {"source": "os-lead-remove", "target": "mcp-heyreach"}, {"source": "os-brief-batch", "target": "mcp-airtable"}, {"source": "os-standup", "target": "mcp-airtable"}, {"source": "os-client-report", "target": "mcp-airtable"}, {"source": "os-client-report", "target": "mcp-supabase"}, {"source": "gh-brief-batch", "target": "scripts-docgen"}, {"source": "clients-folder", "target": "mcp-airtable"}, {"source": "clients-folder", "target": "mcp-supabase"}, {"source": "clients-folder", "target": "agent-onboard"}, {"source": "clients-folder", "target": "agent-report"}, {"source": "clients-folder", "target": "cmd-client-report"}, {"source": "clients-folder", "target": "cmd-client-ingest"}, {"source": "clients-folder", "target": "sk-campaign-copy"}, {"source": "clients-folder", "target": "sk-client-ops"}, {"source": "clients-folder", "target": "cmd-brief-batch"}, {"source": "clients-folder", "target": "cmd-weekly-briefs"}, {"source": "ag-1-client-brief", "target": "ag-2-campaign-brief"}, {"source": "ag-2-campaign-brief", "target": "ag-3-email-policy"}, {"source": "ag-3-email-policy", "target": "ag-4-email-writer"}, {"source": "ag-4-email-writer", "target": "ag-5-sheet-exec"}, {"source": "ag-5-sheet-exec", "target": "ag-6-policy-qa"}, {"source": "ag-1-client-brief", "target": "clients-folder"}, {"source": "ag-4-email-writer", "target": "ext-gsheets"}, {"source": "ag-5-sheet-exec", "target": "ext-gsheets"}, {"source": "ag-6-policy-qa", "target": "ext-gsheets"}, {"source": "sk-campaign-copy", "target": "ag-1-client-brief"}, {"source": "cmd-qualify", "target": "ag-prefilter-grade"}, {"source": "ag-prefilter-grade", "target": "ext-gsheets"}, {"source": "ag-prefilter-grade", "target": "mcp-supabase"}, {"source": "ag-row-writer", "target": "ag-row-sharpener"}, {"source": "ag-row-writer-v2", "target": "ag-row-sharpener"}, {"source": "ag-row-sharpener", "target": "ag-row-qa"}, {"source": "ag-row-sharpener", "target": "ag-row-qa-v2"}, {"source": "ag-row-qa", "target": "ext-gsheets"}, {"source": "ag-row-qa-v2", "target": "ext-gsheets"}, {"source": "ag-row-evaluator", "target": "ext-gsheets"}, {"source": "sk-campaign-copy", "target": "ag-row-writer-v2"}, {"source": "ag-row-evaluator", "target": "ag-row-writer-v2"}, {"source": "ag-1-client-brief", "target": "mcp-airtable"}, {"source": "ag-2-campaign-brief", "target": "mcp-airtable"}, {"source": "ag-4-email-writer", "target": "mcp-supabase"}, {"source": "ag-5-sheet-exec", "target": "mcp-supabase"}, {"source": "ag-6-policy-qa", "target": "mcp-airtable"}, {"source": "ma-api", "target": "ma-session"}, {"source": "ma-session", "target": "ma-tools"}, {"source": "ma-session", "target": "ma-sse"}, {"source": "ma-session", "target": "ma-credentials"}, {"source": "ag-1-client-brief", "target": "ma-session"}, {"source": "ag-4-email-writer", "target": "ma-session"}, {"source": "ag-5-sheet-exec", "target": "ma-session"}, {"source": "ag-6-policy-qa", "target": "ma-session"}, {"source": "cmd-qualify", "target": "ma-session"}, {"source": "cmd-surface", "target": "ma-session"}, {"source": "cmd-brief-batch", "target": "ma-session"}, {"source": "cmd-weekly-briefs", "target": "ma-session"}, {"source": "cmd-client-report", "target": "ma-session"}, {"source": "ag-row-writer", "target": "ma-session"}, {"source": "ag-prefilter-grade", "target": "ma-session"}, {"source": "ma-tools", "target": "ext-gsheets"}, {"source": "ma-tools", "target": "ext-gdrive"}, {"source": "ma-tools", "target": "db-supabase"}, {"source": "mcp-supabase", "target": "ma-api"}, {"source": "mcp-airtable", "target": "ma-api"}, {"source": "mcp-emailbison", "target": "ma-api"}, {"source": "mcp-heyreach", "target": "ma-api"}, {"source": "ev-user-cmd", "target": "ma-api"}, {"source": "ma-api", "target": "db-supabase"}, {"source": "ma-sse", "target": "db-supabase"}];
+const CAT_COLORS={"event": "#f97316", "webhook": "#3b82f6", "n8n": "#22c55e", "database": "#06b6d4", "crm": "#a855f7", "action": "#eab308", "schedule": "#f472b6", "os": "#38bdf8", "github": "#94a3b8", "rule": "#ef4444", "agent": "#818cf8", "plugin": "#fb923c", "command": "#34d399", "skill": "#a3e635", "mcp": "#fbbf24", "script": "#7dd3fc", "folder": "#e2e8f0", "managed": "#d946ef"};
+const CAT_LABEL={"event": "External Event", "webhook": "Platform Webhook", "n8n": "n8n Workflow", "database": "Database / Trigger", "crm": "CRM", "action": "External Action", "schedule": "Scheduled Job", "os": "OS Skill (legacy)", "github": "GitHub Action", "rule": "Rule", "agent": "Agent", "plugin": "Plugin", "command": "Slash Command", "skill": "Skill Group", "mcp": "MCP Tool Group", "script": "Pipeline Script", "folder": "Folder", "managed": "Claude Managed Agents"};
+
+const adj={};NODES.forEach(n=>adj[n.id]=new Set());
+LINKS.forEach(l=>{const s=typeof l.source==='object'?l.source.id:l.source,t=typeof l.target==='object'?l.target.id:l.target;if(adj[s])adj[s].add(t);if(adj[t])adj[t].add(s)});
+const degree={};NODES.forEach(n=>degree[n.id]=0);
+LINKS.forEach(l=>{const s=typeof l.source==='object'?l.source.id:l.source,t=typeof l.target==='object'?l.target.id:l.target;degree[s]=(degree[s]||0)+1;degree[t]=(degree[t]||0)+1});
+
+function nodeR(d){
+  if(d.id==='clients-folder'||d.id==='ev-user-cmd') return 10;
+  if(d.cat==='managed') return 8;
+  const dg=degree[d.id]||0;
+  if(dg>20) return 8;if(dg>12) return 6;if(dg>6) return 4.5;if(dg>2) return 3.5;return 2.8;
+}
+
+const wrap=document.getElementById('graph-wrap');
+const W=wrap.clientWidth,H=wrap.clientHeight;
+const svg=d3.select('#graph').attr('viewBox',`0 0 ${W} ${H}`);
+const defs=svg.append('defs');
+
+// Default glow
+const gf=defs.append('filter').attr('id','glow').attr('x','-80%').attr('y','-80%').attr('width','260%').attr('height','260%');
+gf.append('feGaussianBlur').attr('stdDeviation','4').attr('result','blur');
+const gm=gf.append('feMerge');gm.append('feMergeNode').attr('in','blur');gm.append('feMergeNode').attr('in','SourceGraphic');
+
+// Managed agents glow
+const mf=defs.append('filter').attr('id','glow-managed').attr('x','-100%').attr('y','-100%').attr('width','300%').attr('height','300%');
+mf.append('feGaussianBlur').attr('stdDeviation','6').attr('result','blur');
+const mm=mf.append('feMerge');mm.append('feMergeNode').attr('in','blur');mm.append('feMergeNode').attr('in','SourceGraphic');
+
+const g=svg.append('g');
+const zoom=d3.zoom().scaleExtent([0.04,8]).on('zoom',e=>g.attr('transform',e.transform));
+svg.call(zoom);
+const initT=d3.zoomIdentity.translate(W/2,H/2).scale(0.48);
+svg.call(zoom.transform,initT);
+
+const sim=d3.forceSimulation(NODES)
+  .force('link',d3.forceLink(LINKS).id(d=>d.id).distance(d=>{
+    const sc=NODES.find(n=>n.id===(typeof d.source==='object'?d.source.id:d.source));
+    const tc=NODES.find(n=>n.id===(typeof d.target==='object'?d.target.id:d.target));
+    if(sc?.cat==='managed'||tc?.cat==='managed') return 100;
+    if(sc?.cat===tc?.cat) return 60;
+    return 80;
+  }).strength(0.3))
+  .force('charge',d3.forceManyBody().strength(d=>d.cat==='managed'?-250:-120-(degree[d.id]||0)*4))
+  .force('center',d3.forceCenter(0,0))
+  .force('collision',d3.forceCollide().radius(d=>nodeR(d)+14))
+  .alphaDecay(0.012).velocityDecay(0.44);
+
+// Rotating ring layer (below links)
+const ringG=g.append('g').attr('class','rings');
+
+const linkG=g.append('g');
+const linkSel=linkG.selectAll('line').data(LINKS).join('line')
+  .attr('stroke',l=>{
+    const sid=typeof l.source==='object'?l.source.id:l.source;
+    const cat=NODES.find(n=>n.id===sid)?.cat||'event';
+    return CAT_COLORS[cat]||'#30363d';
+  })
+  .attr('stroke-width',.6).attr('stroke-opacity',.18);
+
+const nodeG=g.append('g');
+const nodeSel=nodeG.selectAll('g').data(NODES).join('g').style('cursor','pointer')
+  .call(d3.drag()
+    .on('start',(e,d)=>{
+      if(!e.active) sim.alphaTarget(0.3).restart();
+      d.fx=d.x; d.fy=d.y;
+      dragging=d;
+      // elastic pull: boost link strength for connected links
+      sim.force('link').strength(l=>{
+        const sid=typeof l.source==='object'?l.source.id:l.source;
+        const tid=typeof l.target==='object'?l.target.id:l.target;
+        return (sid===d.id||tid===d.id) ? 0.7 : 0.15;
+      });
+    })
+    .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y})
+    .on('end',(e,d)=>{
+      if(!e.active) sim.alphaTarget(0);
+      // pin in place — double-click to release
+      d.fx=d.x; d.fy=d.y;
+      d.pinned=true;
+      dragging=null;
+      // reset link strength
+      sim.force('link').strength(0.15);
+    }));
+
+nodeSel.each(function(d){
+  const el=d3.select(this);
+  const r=nodeR(d);
+  const col=CAT_COLORS[d.cat]||'#6e7681';
+  // invisible hit area — min 10px so small nodes are always draggable
+  el.append('circle').attr('r',Math.max(r+4,10)).attr('fill','transparent').attr('class','hit-area');
+  if(d.cat==='folder'){
+    el.append('rect').attr('x',-r).attr('y',-r).attr('width',r*2).attr('height',r*2).attr('rx',2).attr('fill',col).attr('fill-opacity',.85);
+  } else if(d.cat==='managed'){
+    // Hexagon
+    const pts=[0,1,2,3,4,5].map(i=>{const a=Math.PI/180*(60*i-30);return `${(r*1.2*Math.cos(a)).toFixed(1)},${(r*1.2*Math.sin(a)).toFixed(1)}`}).join(' ');
+    el.append('polygon').attr('points',pts).attr('fill',col).attr('fill-opacity',.9)
+      .attr('filter','url(#glow-managed)');
+  } else {
+    el.append('circle').attr('r',r).attr('fill',col).attr('fill-opacity',.85);
+  }
+});
+
+nodeSel.append('text').attr('class','node-label').text(d=>d.label).attr('x',d=>nodeR(d)+4).attr('y',3.5);
+
+// Add a rotating ring per node
+const ringSel = ringG.selectAll('g').data(NODES).join('g');
+ringSel.each(function(d) {
+  const r = nodeR(d) + 4;
+  const col = CAT_COLORS[d.cat] || '#6e7681';
+  const el = d3.select(this);
+  // outer dashed orbit
+  el.append('circle')
+    .attr('r', r)
+    .attr('fill','none')
+    .attr('stroke', col)
+    .attr('stroke-width', 0.7)
+    .attr('stroke-opacity', 0.25)
+    .attr('stroke-dasharray','3 5')
+    .attr('class','ring-orbit');
+  // small bright arc indicator
+  el.append('circle')
+    .attr('r', r)
+    .attr('fill','none')
+    .attr('stroke', col)
+    .attr('stroke-width', 1.2)
+    .attr('stroke-opacity', 0.6)
+    .attr('stroke-dasharray',`${r * 0.5} ${r * 10}`)
+    .attr('class','ring-arc');
+});
+
+let ringAngle = 0;
+function animateRings(ts) {
+  ringAngle += 0.4;
+  ringSel.each(function(d) {
+    const el = d3.select(this);
+    const isSelected = selected && selected.id === d.id;
+    const isConn = selected && (adj[selected.id]||new Set()).has(d.id);
+    const speed = isSelected ? 3 : 0.4;
+    const opacityOrbit = isSelected ? 0.55 : isConn ? 0.35 : 0.18;
+    const opacityArc   = isSelected ? 0.9  : isConn ? 0.6  : 0.4;
+    el.select('.ring-orbit').attr('stroke-opacity', opacityOrbit)
+      .attr('transform',`rotate(${ringAngle * speed})`);
+    el.select('.ring-arc').attr('stroke-opacity', opacityArc)
+      .attr('transform',`rotate(${-ringAngle * speed * 1.4})`);
+  });
+  requestAnimationFrame(animateRings);
+}
+requestAnimationFrame(animateRings);
+
+sim.on('tick',()=>{
+  linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+  nodeSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+  ringSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+  // show pin indicator
+  ringSel.select('.ring-orbit').attr('stroke-dasharray', d => d.pinned ? '2 2' : '3 5');
+});
+
+let selected=null;
+let dragging=null;
+
+// Double-click to unpin a node
+nodeSel.on('dblclick',(e,d)=>{
+  e.stopPropagation();
+  d.fx=null; d.fy=null; d.pinned=false;
+  sim.alphaTarget(0.1).restart();
+  setTimeout(()=>sim.alphaTarget(0),300);
+});
+function selectNode(d){
+  selected=d;const conn=adj[d.id]||new Set();
+  nodeSel.selectAll('circle,rect,polygon')
+    .attr('fill-opacity',n=>n.id===d.id||conn.has(n.id)?1:.05)
+    .attr('fill',n=>n.id===d.id?'#f0f6fc':(CAT_COLORS[n.cat]||'#6e7681'));
+  nodeSel.filter(n=>n.id===d.id).selectAll('circle,rect,polygon').attr('filter','url(#glow)');
+  nodeSel.selectAll('.node-label').attr('fill',n=>n.id===d.id?'#e6edf3':conn.has(n.id)?'#8b949e':'#1e2a38');
+  linkSel
+    .attr('stroke-opacity',l=>{const sid=typeof l.source==='object'?l.source.id:l.source,tid=typeof l.target==='object'?l.target.id:l.target;return sid===d.id||tid===d.id?.9:.03})
+    .attr('stroke-width',l=>{const sid=typeof l.source==='object'?l.source.id:l.source,tid=typeof l.target==='object'?l.target.id:l.target;return sid===d.id||tid===d.id?2:.6})
+    .attr('stroke',l=>{const sid=typeof l.source==='object'?l.source.id:l.source,tid=typeof l.target==='object'?l.target.id:l.target;const cat=NODES.find(n=>n.id===sid)?.cat||'event';return sid===d.id||tid===d.id?(CAT_COLORS[cat]||'#6e7681'):'#1e2a38'});
+  const col=CAT_COLORS[d.cat]||'#6e7681';
+  const badge=document.getElementById('panel-badge');
+  badge.textContent=CAT_LABEL[d.cat]||d.cat;
+  badge.style.cssText=`display:inline-block;padding:2px 8px;border-radius:10px;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;background:${col}22;color:${col};border:1px solid ${col}44`;
+  document.getElementById('panel-name').textContent=d.label;
+  document.getElementById('panel-desc').textContent=d.desc||'';
+  document.getElementById('pcc').textContent=(adj[d.id]||new Set()).size;
+  document.getElementById('panel').classList.add('visible');
+}
+function clearSel(){
+  selected=null;
+  nodeSel.selectAll('circle').attr('fill',d=>CAT_COLORS[d.cat]||'#6e7681').attr('fill-opacity',.85).attr('r',nodeR).attr('filter',null);
+  nodeSel.selectAll('rect,polygon').attr('fill',d=>CAT_COLORS[d.cat]||'#6e7681').attr('fill-opacity',.9).attr('filter',null);
+  nodeSel.selectAll('.node-label').attr('fill','#6e7681');
+  linkSel.attr('stroke',l=>{const sid=typeof l.source==='object'?l.source.id:l.source;const cat=NODES.find(n=>n.id===sid)?.cat||'event';return CAT_COLORS[cat]||'#30363d'}).attr('stroke-opacity',.18).attr('stroke-width',.6);
+  document.getElementById('panel').classList.remove('visible');
+}
+function resetView(){svg.transition().duration(500).call(zoom.transform,initT)}
+nodeSel.on('click',(e,d)=>{e.stopPropagation();selected?.id===d.id?clearSel():selectNode(d)});
+svg.on('click',clearSel);
+document.getElementById('search').addEventListener('input',function(){
+  const q=this.value.trim().toLowerCase();
+  if(!q){clearSel();return}
+  const m=NODES.find(n=>n.label.toLowerCase().includes(q)||n.desc?.toLowerCase().includes(q)||n.cat.toLowerCase().includes(q));
+  if(m){selectNode(m);setTimeout(()=>{if(m.x!=null)svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity.translate(W/2-m.x*1.8,H/2-m.y*1.8).scale(1.8))},400)}
+});
+document.getElementById('sn').textContent=NODES.length;
+document.getElementById('sl').textContent=LINKS.length;
+
+// ── Neural pulse particles ──────────────────────────────────────────
+const particleG = g.append('g').attr('class','pulses');
+const pulses = [];
+let lastSpawn = 0;
+let lastFocusSpawn = 0;
+
+function spawnPulse(focused = false) {
+  let link;
+  if (focused && selected) {
+    const outLinks = LINKS.filter(l => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source;
+      return sid === selected.id;
+    });
+    if (!outLinks.length) return;
+    link = outLinks[Math.floor(Math.random() * outLinks.length)];
+  } else {
+    if (!LINKS.length) return;
+    link = LINKS[Math.floor(Math.random() * LINKS.length)];
+  }
+
+  const src = typeof link.source === 'object' ? link.source : NODES.find(n => n.id === link.source);
+  const tgt = typeof link.target === 'object' ? link.target : NODES.find(n => n.id === link.target);
+  if (!src || !tgt || src.x == null) return;
+
+  const color = CAT_COLORS[src.cat] || '#6e7681';
+  const size = focused ? 1.8 + Math.random() * 0.8 : 1.2 + Math.random() * 1.0;
+  const speed = focused ? 0.005 + Math.random() * 0.004 : 0.003 + Math.random() * 0.004;
+  const maxOpacity = focused ? 0.65 : 0.35;
+
+  const el = particleG.append('circle')
+    .attr('r', size)
+    .attr('fill', color)
+    .attr('opacity', 0)
+    .style('filter', focused
+      ? `drop-shadow(0 0 4px ${color})`
+      : `drop-shadow(0 0 2px ${color})`);
+
+  const waveAmp = focused ? (Math.random()-0.5)*5 : (Math.random()-0.5)*6;
+  const waveFreq = 1.5 + Math.random()*2;
+  pulses.push({ el, src, tgt, t: 0, speed, color, size, maxOpacity, focused, waveAmp, waveFreq });
+}
+
+function animatePulses(ts) {
+  // general ambient pulses — always
+  if (ts - lastSpawn > 100) { spawnPulse(false); lastSpawn = ts; }
+
+  // focused pulses from selected node
+  if (selected && ts - lastFocusSpawn > 180) { spawnPulse(true); lastFocusSpawn = ts; }
+  // drag burst — pulses fire from dragged node while dragging
+  if (dragging && ts - lastFocusSpawn > 90) { spawnPulse(true); lastFocusSpawn = ts; }
+
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    // kill stale focused pulses when selection cleared
+    if (p.focused && !selected) { p.el.remove(); pulses.splice(i, 1); continue; }
+
+    p.t += p.speed;
+    if (p.t >= 1) { p.el.remove(); pulses.splice(i, 1); continue; }
+
+    const src = p.src, tgt = p.tgt;
+    if (src.x == null || tgt.x == null) continue;
+
+    const dx = tgt.x - src.x, dy = tgt.y - src.y;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const nx = -dy/len, ny = dx/len; // perpendicular
+    const wave = Math.sin(p.t * Math.PI * p.waveFreq) * p.waveAmp * Math.sin(p.t * Math.PI);
+
+    const x = src.x + dx * p.t + nx * wave;
+    const y = src.y + dy * p.t + ny * wave;
+    const fade = p.t < 0.12 ? p.t / 0.12 : p.t > 0.85 ? (1 - p.t) / 0.15 : 1;
+
+    p.el.attr('cx', x).attr('cy', y).attr('opacity', fade * p.maxOpacity);
+  }
+  requestAnimationFrame(animatePulses);
+}
+
+sim.on('end', () => requestAnimationFrame(animatePulses));
+setTimeout(() => requestAnimationFrame(animatePulses), 2500);
+const legEl=document.getElementById('legend');
+Object.entries(CAT_COLORS).forEach(([cat,col])=>{
+  const count=NODES.filter(n=>n.cat===cat).length;
+  if(!count)return;
+  legEl.innerHTML+=`<div class="leg-item"><div class="leg-dot" style="background:${col}"></div>${CAT_LABEL[cat]} (${count})</div>`;
+});
+</script>
+</body>
+</html>
