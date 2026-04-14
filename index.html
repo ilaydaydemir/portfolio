@@ -31,8 +31,17 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
 
 /* PAGES */
 #pages{position:fixed;top:52px;left:0;right:0;bottom:0;overflow:hidden}
-.page{position:absolute;inset:0;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .2s}
+.page{position:absolute;inset:0;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .35s}
 .page.active{opacity:1;pointer-events:auto}
+
+/* SIDE NAV */
+#side-nav{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:200;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.side-dot-wrap{display:flex;align-items:center;gap:8px;cursor:pointer}
+.side-dot-label{font-size:9px;color:var(--text4);white-space:nowrap;opacity:0;transition:opacity .2s;letter-spacing:.06em;text-transform:uppercase}
+#side-nav:hover .side-dot-label{opacity:1}
+.side-dot{width:6px;height:6px;border-radius:3px;background:var(--border2);transition:all .3s;flex-shrink:0}
+.side-dot-wrap.active .side-dot{background:var(--accent);height:20px}
+.side-dot-wrap:hover .side-dot{background:var(--text3)}
 
 /* === GRAPH PAGE === */
 #page-graph{background:var(--bg)}
@@ -212,11 +221,23 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
   <div class="nav-right">ilaydaydemr@gmail.com &nbsp;·&nbsp; Milan, Italy &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/ilaydaaydemir/" target="_blank">LinkedIn</a></div>
 </div>
 
+<div id="side-nav">
+  <div class="side-dot-wrap active" onclick="showTab('cv')"><span class="side-dot-label">CV</span><div class="side-dot"></div></div>
+  <div class="side-dot-wrap" onclick="showTab('graph')"><span class="side-dot-label">System Map</span><div class="side-dot"></div></div>
+  <div class="side-dot-wrap" onclick="showTab('agents')"><span class="side-dot-label">Agents</span><div class="side-dot"></div></div>
+  <div class="side-dot-wrap" onclick="showTab('automation')"><span class="side-dot-label">Automation</span><div class="side-dot"></div></div>
+  <div class="side-dot-wrap" onclick="showTab('stories')"><span class="side-dot-label">Stories</span><div class="side-dot"></div></div>
+</div>
+
 <div id="pages">
 
   <!-- GRAPH -->
   <div class="page" id="page-graph">
     <iframe id="graph-frame" src="graph.html" title="System Map"></iframe>
+    <div id="graph-scroll-zones" style="position:absolute;inset:0;pointer-events:none;z-index:5">
+      <div style="position:absolute;top:0;left:0;right:0;height:60px;pointer-events:auto;cursor:default" onwheel="if(event.deltaY<-30){event.preventDefault();goPrev()}" style="pointer-events:auto"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:60px;pointer-events:auto;cursor:default" onwheel="if(event.deltaY>30){event.preventDefault();goNext()}"></div>
+    </div>
 
     <div id="sys-panel">
       <button id="sys-toggle" onclick="toggleSys()">
@@ -1005,12 +1026,56 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
 </div>
 
 <script>
+const tabOrder = ['cv','graph','agents','automation','stories'];
+let currentTab = 'cv';
+let transitioning = false;
+
 function showTab(name) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  currentTab = name;
+  const idx = tabOrder.indexOf(name);
+
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  document.querySelectorAll('.side-dot-wrap').forEach((d,i) => d.classList.toggle('active', i === idx));
 }
+
+function goNext() {
+  if (transitioning) return;
+  const idx = tabOrder.indexOf(currentTab);
+  if (idx < tabOrder.length - 1) {
+    transitioning = true;
+    showTab(tabOrder[idx + 1]);
+    setTimeout(() => transitioning = false, 500);
+  }
+}
+
+function goPrev() {
+  if (transitioning) return;
+  const idx = tabOrder.indexOf(currentTab);
+  if (idx > 0) {
+    transitioning = true;
+    showTab(tabOrder[idx - 1]);
+    setTimeout(() => transitioning = false, 500);
+  }
+}
+
+// Scroll-to-edge detection on each scrollable page
+document.querySelectorAll('.page').forEach(page => {
+  page.addEventListener('wheel', (e) => {
+    const atBottom = page.scrollTop + page.clientHeight >= page.scrollHeight - 8;
+    const atTop = page.scrollTop <= 2;
+    if (e.deltaY > 30 && atBottom) { e.preventDefault(); goNext(); }
+    else if (e.deltaY < -30 && atTop) { e.preventDefault(); goPrev(); }
+  }, { passive: false });
+});
+
+// Keyboard nav
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') goNext();
+  if (e.key === 'ArrowUp') goPrev();
+});
+
 function toggleSys() {
   const body = document.getElementById('sys-body');
   const arrow = document.getElementById('sys-toggle-arrow');
