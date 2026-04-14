@@ -27,7 +27,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
 .tab-btn:not(.active)::after{content:'';position:absolute;top:10px;right:10px;width:5px;height:5px;border-radius:50%;background:var(--accent);animation:tab-pulse 1.8s ease-in-out infinite;opacity:0}
 .tab-btn:not(.active):hover::after{opacity:0}
 @keyframes tab-pulse{0%,100%{opacity:0;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}}
-.nav-right{padding:0 16px;font-size:10px;color:var(--text4);white-space:nowrap}
+.nav-right{padding:0 16px;font-size:10px;color:var(--text);white-space:nowrap;display:flex;align-items:center;gap:12px}.nav-right a{color:var(--accent2);text-decoration:none;font-size:10px}.nav-right a:hover{text-decoration:underline}
 
 /* PAGES */
 #pages{position:fixed;top:52px;left:0;right:0;bottom:0;overflow:hidden}
@@ -209,7 +209,7 @@ html,body{width:100%;height:100%;background:var(--bg);font-family:'Inter',sans-s
     <button class="tab-btn" onclick="showTab('automation')">Automation</button>
     <button class="tab-btn" onclick="showTab('stories')">Stories</button>
   </div>
-  <div class="nav-right">ilaydaydemr@gmail.com &nbsp;·&nbsp; Milan, Italy</div>
+  <div class="nav-right">ilaydaydemr@gmail.com &nbsp;·&nbsp; Milan, Italy &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/ilaydaaydemir/" target="_blank">LinkedIn</a></div>
 </div>
 
 <div id="pages">
